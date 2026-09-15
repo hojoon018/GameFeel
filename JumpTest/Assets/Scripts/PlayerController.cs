@@ -59,15 +59,35 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private Vector3 landSquashScale = new Vector3(1.35f, 0.65f, 1f);
     [Tooltip("원래 크기로 복귀하는 속도")]
     [SerializeField] private float squashResetSpeed = 12f;
+    
+    [Header("Hitstop & Death")]
+    [Tooltip("피격 시 생성할 파티클/이펙트 프리팹")]
+    [SerializeField] private GameObject deathEffectPrefab;
+    [Tooltip("피격 시 순간 시간 정지 연출 활성화 여부")]
+    [SerializeField] private bool useHitstop = true;
+    [Tooltip("히트스탑 유지 시간 (초 단위, 보통 0.05 ~ 0.15초가 적당)")]
+    [SerializeField] private float hitstopDuration = 0.08f;
+    [Tooltip("사망 후 리스폰 전 대기 시간 (초 단위)")]
+    [SerializeField] private float respawnDelay = 0.15f;
 
     private Vector3 originalScale = Vector3.one;
     private Coroutine squashCoroutine;
     private Rigidbody2D rb;
+    
+    private bool isDead = false;
+    private Vector3 spawnPoint;
+    private SpriteRenderer spriteRenderer;
 
     private void Awake()
     {
         rb = GetComponent<Rigidbody2D>();
         rb.gravityScale = defaultGravityScale;
+        
+        spriteRenderer = spriteTransform.GetComponent<SpriteRenderer>();
+        if (spriteRenderer == null)
+        {
+            spriteRenderer = GetComponentInChildren<SpriteRenderer>();
+        }
 
         // Sprite Transform을 따로 지정하지 않았을 경우 처리
         if (spriteTransform == null)
@@ -85,6 +105,11 @@ public class PlayerController : MonoBehaviour
         }
 
         originalScale = spriteTransform.localScale;
+    }
+    
+    private void Start()
+    {
+        spawnPoint = transform.position;
     }
 
     private void Update()
@@ -295,5 +320,90 @@ public class PlayerController : MonoBehaviour
                 }
             }
         }
+    }
+    
+    private void OnTriggerEnter2D(Collider2D collision)
+    {
+        // 충돌한 대상의 태그가 "Hazard"이거나 가시 컴포넌트가 있다면
+        if (collision.CompareTag("Obstacle") && !isDead)
+        {
+            Die();
+        }
+    }
+
+// 4. 사망 및 리스폰 처리
+    public void Die()
+    {
+        if (isDead) return;
+        StartCoroutine(DieRoutine());
+    }
+    
+    private IEnumerator DieRoutine()
+    {
+        isDead = true;
+        SetVelocity(Vector2.zero);
+
+        // 1. 피격 즉시 이펙트 생성
+        if (deathEffectPrefab != null)
+        {
+            Instantiate(deathEffectPrefab, transform.position, Quaternion.identity);
+        }
+
+        //  2. 캐릭터 스프라이트 숨기기 (사라짐 연출)
+        if (spriteRenderer != null)
+        {
+            spriteRenderer.enabled = false;
+        }
+
+        // 3. 히트스탑 연출
+        if (useHitstop)
+        {
+            float originalTimeScale = Time.timeScale;
+            Time.timeScale = 0f;
+
+            yield return new WaitForSecondsRealtime(hitstopDuration);
+
+            Time.timeScale = originalTimeScale;
+        }
+
+        // 4. 사라진 상태로 리스폰 대기
+        if (respawnDelay > 0f)
+        {
+            yield return new WaitForSecondsRealtime(respawnDelay);
+        }
+
+        // 5. 원래 위치로 리스폰 및 복구
+        Respawn();
+    }
+    
+    private void Respawn()
+    {
+        if (squashCoroutine != null)
+        {
+            StopCoroutine(squashCoroutine);
+            squashCoroutine = null;
+        }
+        if (spriteTransform != null)
+        {
+            spriteTransform.localScale = originalScale;
+        }
+
+        // 위치 이동 및 속도 초기화
+        transform.position = spawnPoint;
+        SetVelocity(Vector2.zero);
+
+        // 6. 캐릭터 다시 표시
+        if (spriteRenderer != null)
+        {
+            spriteRenderer.enabled = true;
+        }
+
+        isDead = false;
+    }
+
+// 씬 재시작이나 오브젝트 파괴 시 타임스케일이 0으로 남아있는 현상 방지
+    private void OnDisable()
+    {
+        Time.timeScale = 1f;
     }
 }
