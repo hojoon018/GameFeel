@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.InputSystem;
 
 public class PlayerPhysicsUI : MonoBehaviour
 {
@@ -10,6 +11,14 @@ public class PlayerPhysicsUI : MonoBehaviour
     [SerializeField] private Toggle variableJumpToggle;
     [SerializeField] private Toggle coyoteTimeToggle;
     [SerializeField] private Toggle squashToggle;
+    
+    [Header("Jump Status Image (ON/OFF)")] 
+        [Tooltip("상태를 표시할 UI 이미지")] 
+        [SerializeField] private Image spaceBarImage;
+        [Tooltip("키를 눌렀을 때 (ON) 색상")]
+        [SerializeField] private Color onColor = Color.green; // 기본값 초록색
+        [Tooltip("키를 떼었을 때 (OFF) 색상")]
+        [SerializeField] private Color offColor = new Color(1f, 1f, 1f, 0.5f); // 기본값 반투명 흰색
 
     private void Start()
     {
@@ -37,8 +46,21 @@ public class PlayerPhysicsUI : MonoBehaviour
             squashToggle.isOn = player.UseSquashAndStretch;
             squashToggle.onValueChanged.AddListener(isOn => player.UseSquashAndStretch = isOn);
         }
+        
+        if (spaceBarImage != null)
+        {
+            spaceBarImage.color = offColor;
+        }
     }
 
+    private void Update()
+    {
+        if (spaceBarImage == null || Keyboard.current == null) return;
+        
+        bool isSpacePressed = Keyboard.current.spaceKey.isPressed;
+        
+        spaceBarImage.color = isSpacePressed ? onColor : offColor;
+    }
     private void OnDestroy()
     {
         // 메모리 누수 방지 및 리스너 해제
